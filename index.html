@@ -146,9 +146,9 @@
   </div>
 
   <div class="card hidden" id="searchCard">
-    <label for="q">Artikelnummer</label>
+    <label for="q">Artikelnummer oder Bezeichnung</label>
     <div class="searchbox">
-      <input type="text" id="q" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" placeholder="Nummer eingeben …">
+      <input type="text" id="q" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" placeholder="Nummer oder Name …">
       <button class="clear hidden" id="clearBtn" aria-label="Leeren">×</button>
     </div>
     <div id="hits"></div>
@@ -317,18 +317,33 @@ function useSheet(name){
 /* ---------- Suche ---------- */
 const norm = v => String(v ?? '').trim().toLowerCase();
 function find(term){
-  const t = norm(term); if (!t) return [];
-  const a = +$('colArt').value, res = [];
-  for (let r = 1; r < aoa.length; r++) if (norm(aoa[r][a]) === t) return [r];
-  for (let r = 1; r < aoa.length; r++) if (norm(aoa[r][a]).includes(t)) res.push(r);
-  return res.slice(0, 8);
+  const t = norm(term); if (!t) return { rows: [], more: 0 };
+  const a = +$('colArt').value, nm = +$('colName').value;
+  const toks = t.split(/\s+/).filter(Boolean);
+  const scored = [];
+  for (let r = 1; r < aoa.length; r++) {
+    const art = norm(aoa[r][a]), name = norm(aoa[r][nm]);
+    if (!art && !name) continue;
+    let s = 0;
+    if (art === t) s = 100;
+    else if (art.startsWith(t)) s = 80;
+    else if (art.includes(t)) s = 70;
+    else if (toks.every(k => name.includes(k) || art.includes(k))) {
+      const words = name.split(/[\s,.;:\/()\-]+/);
+      s = name.startsWith(t) ? 60 : (words.some(w => w.startsWith(toks[0])) ? 50 : 40);
+    }
+    if (s) scored.push([s, r]);
+  }
+  scored.sort((x, y) => y[0] - x[0] || x[1] - y[1]);
+  if (scored.length && scored[0][0] === 100) return { rows: [scored[0][1]], more: 0 };
+  return { rows: scored.slice(0, 20).map(x => x[1]), more: Math.max(0, scored.length - 20) };
 }
 function search(){
   const term = $('q').value;
   $('clearBtn').classList.toggle('hidden', !term);
   $('hits').innerHTML = '';
   if (!term.trim()) { $('itemCard').classList.add('hidden'); current = null; currentArt = null; return; }
-  const rows = find(term);
+  const { rows, more } = find(term);
   if (rows.length === 1) { show(rows[0]); return; }
   $('itemCard').classList.add('hidden'); current = null; currentArt = null;
   if (!rows.length) { $('hits').innerHTML = '<div class="status err" style="margin-top:10px">Kein Artikel gefunden</div>'; return; }
@@ -336,10 +351,11 @@ function search(){
     const b = document.createElement('button'); b.className = 'hit';
     b.innerHTML = '<strong></strong><small></small>';
     b.firstChild.textContent = aoa[r][+$('colArt').value];
-    b.lastChild.textContent = aoa[r][+$('colName').value];
+    b.lastChild.textContent = (aoa[r][+$('colName').value] || '(ohne Bezeichnung)') + ' · Bestand ' + qty(r);
     b.onclick = () => show(r);
     $('hits').appendChild(b);
   });
+  if (more) { const m = document.createElement('div'); m.className = 'status'; m.style.marginTop = '8px'; m.textContent = '+ ' + more + ' weitere Treffer, Suche verfeinern'; $('hits').appendChild(m); }
 }
 $('q').addEventListener('input', search);
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter') { search(); $('q').blur(); } });
