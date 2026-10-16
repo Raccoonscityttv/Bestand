@@ -26,9 +26,9 @@
   html{-webkit-text-size-adjust:100%}
   body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent;padding-bottom:env(safe-area-inset-bottom)}
   header{background:var(--card);border-bottom:1px solid var(--line);box-shadow:var(--shadow);padding-top:env(safe-area-inset-top)}
-  .head{max-width:620px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px}
+  .head{max-width:620px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:10px}
   .logo-slot{height:40px;min-width:40px;display:flex;align-items:center;cursor:pointer}
-  .logo-slot img{max-height:40px;max-width:120px;display:block}
+  .logo-slot img{max-height:40px;max-width:110px;display:block}
   .logo-add{border:1.5px dashed var(--line);border-radius:10px;padding:8px 12px;font-size:.78rem;color:var(--muted)}
   .title{flex:1;min-width:0}
   .title h1{margin:0;font-size:1.05rem}
@@ -38,10 +38,13 @@
   button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:12px;padding:12px 16px;transition:transform .06s}
   button:active{transform:scale(.97)}
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-  input[type=text],select{font:inherit;font-size:16px;width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none;appearance:none}
-  input[type=text]:focus,select:focus{border-color:var(--accent)}
+  button.icon{padding:10px 12px;font-size:1.15rem;line-height:1}
+  input[type=text],input[type=password],select{font:inherit;font-size:16px;width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none;appearance:none}
+  input:focus,select:focus{border-color:var(--accent)}
   label{display:block;font-size:.76rem;font-weight:600;color:var(--muted);margin:0 0 6px;text-transform:uppercase;letter-spacing:.5px}
+  .field{margin-bottom:12px}
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media (max-width:520px){.grid{grid-template-columns:1fr}}
   .status{font-size:.85rem;color:var(--muted)}
   .status.ok{color:var(--ok)} .status.err{color:var(--bad)} .status.warn{color:var(--warn)}
@@ -67,6 +70,9 @@
   .foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
   .btnrow{display:flex;gap:10px;margin-top:12px}
   .btnrow button{flex:1}
+  .help{font-size:.85rem;color:var(--muted);line-height:1.5}
+  .help ol{padding-left:20px;margin:8px 0}
+  .help code{background:var(--bg);padding:1px 5px;border-radius:5px}
 </style>
 </head>
 <body>
@@ -75,8 +81,9 @@
     <div class="logo-slot" id="logoSlot" title="Logo ändern"></div>
     <div class="title">
       <h1>Bestand anpassen</h1>
-      <div id="fileStatus">Keine Datei geladen</div>
+      <div class="status" id="fileStatus">Keine Datei geladen</div>
     </div>
+    <button class="icon" id="setBtn" aria-label="Einstellungen">⚙︎</button>
     <button class="primary" id="openBtn">Datei öffnen</button>
   </div>
 </header>
@@ -84,6 +91,46 @@
 <input type="file" id="fallbackInput" accept=".xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
 
 <main>
+  <div class="card hidden" id="settingsCard">
+    <div style="font-weight:700;margin-bottom:4px">GitHub-Synchronisierung</div>
+    <div class="status" style="margin-bottom:12px">Der Bestand liegt dann in einem <b>privaten</b> GitHub-Repository und ist auf allen Geräten gleich.</div>
+    <div class="grid2">
+      <div class="field"><label for="cfgOwner">Konto / Organisation</label><input type="text" id="cfgOwner" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="mein-name"></div>
+      <div class="field"><label for="cfgRepo">Repository</label><input type="text" id="cfgRepo" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="bestand-daten"></div>
+      <div class="field"><label for="cfgBranch">Branch</label><input type="text" id="cfgBranch" autocapitalize="off" autocorrect="off" spellcheck="false" value="main"></div>
+      <div class="field"><label for="cfgPath">Datei</label><input type="text" id="cfgPath" autocapitalize="off" autocorrect="off" spellcheck="false" value="bestand.json"></div>
+    </div>
+    <div class="field"><label for="cfgToken">Zugriffstoken</label><input type="password" id="cfgToken" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="github_pat_…"></div>
+    <div class="status" id="cfgMsg" style="min-height:1.3em"></div>
+    <div class="btnrow">
+      <button class="primary" id="cfgSave">Speichern &amp; testen</button>
+      <button id="cfgClose">Schließen</button>
+    </div>
+    <button id="cfgOff" class="hidden" style="width:100%;margin-top:10px;color:var(--bad)">Verbindung trennen</button>
+    <details>
+      <summary>Token und Repository einrichten</summary>
+      <div class="help">
+        <ol>
+          <li>Auf github.com ein <b>neues, privates</b> Repository anlegen (z. B. <code>bestand-daten</code>), mit „Add a README file“.</li>
+          <li>Unter Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → „Generate new token“.</li>
+          <li>„Repository access“: <b>Only select repositories</b> und nur das Daten-Repository wählen.</li>
+          <li>Unter „Permissions“ → Repository permissions → <b>Contents: Read and write</b>.</li>
+          <li>Laufzeit wählen (maximal 1 Jahr), Token erzeugen, kopieren und oben einfügen. Er wird nur auf diesem Gerät gespeichert.</li>
+        </ol>
+        Auf jedem Gerät die gleichen Angaben eintragen.
+      </div>
+    </details>
+  </div>
+
+  <div class="card hidden" id="importCard">
+    <div style="font-weight:600;margin-bottom:4px">Import vorbereiten</div>
+    <div class="status" id="importText"></div>
+    <div class="btnrow">
+      <button class="primary" id="importGo">Als Bestand hochladen</button>
+      <button id="importCancel">Abbrechen</button>
+    </div>
+  </div>
+
   <div class="card hidden" id="restoreCard">
     <div style="font-weight:600;margin-bottom:4px">Letzter Stand gefunden</div>
     <div class="status" id="restoreText"></div>
@@ -95,7 +142,7 @@
 
   <div class="card" id="emptyCard">
     <div style="font-weight:600;margin-bottom:6px">Los geht's</div>
-    <div class="status">Tippe auf „Datei öffnen“ und wähle deine Zählliste aus der Dateien-App. Danach kannst du Artikel suchen und den Bestand mit + und − ändern. Zum Schluss mit „Exportieren“ die Datei wieder in Dateien sichern.</div>
+    <div class="status" id="emptyText">Tippe auf „Datei öffnen“ und wähle deine Zählliste aus der Dateien-App. Danach kannst du Artikel suchen und den Bestand mit + und − ändern. Zum Schluss mit „Exportieren“ die Datei wieder in Dateien sichern. Für mehrere Geräte kannst du über ⚙︎ die GitHub-Synchronisierung einrichten.</div>
   </div>
 
   <div class="card hidden" id="searchCard">
@@ -139,7 +186,9 @@
 const $ = id => document.getElementById(id);
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-let wb, ws, fileHandle = null, fileName = '', aoa = [], range, hdr = [], current = null, saveTimer = null, saving = false, dirty = false, changes = 0;
+let wb = null, ws = null, fileHandle = null, fileName = '', aoa = [], range = null, hdr = [];
+let current = null, currentArt = null, saveTimer = null, saving = false, dirty = false, changes = 0;
+let syncMode = false, importMode = false;
 const canWrite = 'showOpenFilePicker' in window;
 
 function status(el, text, cls){ el.textContent = text; el.className = el.className.replace(/\b(ok|err|warn)\b/g,'').trim() + (cls ? ' ' + cls : ''); }
@@ -182,9 +231,13 @@ $('logoInput').onchange = e => {
 };
 renderLogo();
 
-/* ---------- Datei laden ---------- */
+/* ---------- Excel laden ---------- */
 $('openBtn').onclick = async () => {
   if (!window.XLSX) { status($('fileStatus'), 'Excel-Bibliothek nicht geladen', 'err'); return; }
+  if (syncMode) {
+    if (!confirm('Excel-Datei importieren?\n\nDer Bestand in GitHub wird danach durch den Inhalt der Datei ersetzt.')) return;
+    $('fallbackInput').click(); return;
+  }
   if (canWrite && !isIOS) {
     try {
       [fileHandle] = await showOpenFilePicker({ types:[{description:'Excel', accept:{[XLSX_MIME]:['.xlsx','.xlsm']}}] });
@@ -195,20 +248,27 @@ $('openBtn').onclick = async () => {
 };
 $('fallbackInput').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
-  fileHandle = null;
-  try { await load(await f.arrayBuffer(), f.name, 0); await persist(); }
-  catch(err){ status($('fileStatus'), 'Datei konnte nicht gelesen werden', 'err'); }
+  try {
+    const buf = await f.arrayBuffer();
+    if (syncMode) startImport(buf, f.name);
+    else { fileHandle = null; await load(buf, f.name, 0); await persist(); }
+  } catch(err){ status($('fileStatus'), 'Datei konnte nicht gelesen werden', 'err'); }
   e.target.value = '';
 };
 
-async function load(buf, name, startChanges){
-  fileName = name; changes = startChanges || 0;
+function readWorkbook(buf, name){
+  fileName = name;
   wb = XLSX.read(buf, {type:'array'});
   const sel = $('sheetSel'); sel.innerHTML = '';
   wb.SheetNames.forEach(n => sel.add(new Option(n, n)));
   $('sheetWrap').classList.toggle('hidden', wb.SheetNames.length < 2);
   sel.onchange = () => useSheet(sel.value);
   useSheet(wb.SheetNames[0]);
+}
+
+async function load(buf, name, startChanges){
+  changes = startChanges || 0;
+  readWorkbook(buf, name);
   status($('fileStatus'), name, 'ok');
   $('emptyCard').classList.add('hidden');
   $('restoreCard').classList.add('hidden');
@@ -218,30 +278,40 @@ async function load(buf, name, startChanges){
 
 function updateHint(){
   const el = $('dlHint');
+  if (syncMode) { status(el, 'Die Daten liegen in GitHub und sind auf allen Geräten gleich. Export erstellt eine Excel-Kopie.'); return; }
   if (fileHandle) { status(el, 'Änderungen werden direkt in die Datei geschrieben. Export erstellt eine Kopie.'); return; }
   if (changes > 0) status(el, changes + (changes === 1 ? ' Änderung' : ' Änderungen') + ' noch nicht in Dateien gesichert. Zum Sichern „Exportieren“ tippen.', 'warn');
   else status(el, 'Alles gesichert. Nach weiteren Änderungen erneut exportieren.');
 }
 
+function fillSelects(h, preset){
+  const sels = [$('colArt'), $('colName'), $('colQty')];
+  sels.forEach(s => { s.innerHTML = ''; h.forEach((x,i) => s.add(new Option(x || ('Spalte ' + (i+1)), i))); });
+  const guess = (re, fb) => { const i = h.findIndex(x => re.test(x)); return i >= 0 ? i : fb; };
+  const p = preset || [
+    guess(/art.*(nr|num)|artikel|nummer|sku|teilenr/i, 0),
+    guess(/bezeich|beschreib|name|text|artikelname/i, Math.min(1, h.length-1)),
+    guess(/bestand|menge|anzahl|stück|stk|zähl/i, Math.min(2, h.length-1))
+  ];
+  sels[0].value = p[0]; sels[1].value = p[1]; sels[2].value = p[2];
+}
+['colArt','colName','colQty'].forEach(id => $(id).onchange = () => {
+  if (!syncMode || importMode) { try { localStorage.setItem('map:' + hdr.join('|'), JSON.stringify([$('colArt').value, $('colName').value, $('colQty').value])); } catch(e){} }
+  $('hits').innerHTML = ''; $('itemCard').classList.add('hidden');
+});
+
 function useSheet(name){
   ws = wb.Sheets[name];
-  range = XLSX.utils.decode_range(ws['!ref']);
+  range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
   aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:'', blankrows:true, range: ws['!ref']});
   hdr = (aoa[0] || []).map(h => String(h).trim());
-  const key = 'map:' + hdr.join('|');
-  let saved = null; try { saved = JSON.parse(localStorage.getItem(key)); } catch(e){}
-  [$('colArt'), $('colName'), $('colQty')].forEach(s => { s.innerHTML = ''; hdr.forEach((h,i) => s.add(new Option(h || ('Spalte ' + (i+1)), i))); });
-  const guess = (re, fb) => { const i = hdr.findIndex(h => re.test(h)); return i >= 0 ? i : fb; };
-  $('colArt').value  = saved ? saved[0] : guess(/art.*(nr|num)|artikel|nummer|sku|teilenr/i, 0);
-  $('colName').value = saved ? saved[1] : guess(/bezeich|beschreib|name|text|artikelname/i, Math.min(1, hdr.length-1));
-  $('colQty').value  = saved ? saved[2] : guess(/bestand|menge|anzahl|stück|stk|zähl/i, Math.min(2, hdr.length-1));
-  [$('colArt'), $('colName'), $('colQty')].forEach(s => s.onchange = () => {
-    try { localStorage.setItem(key, JSON.stringify([$('colArt').value, $('colName').value, $('colQty').value])); } catch(e){}
-    $('hits').innerHTML = ''; $('itemCard').classList.add('hidden');
-  });
+  let saved = null; try { saved = JSON.parse(localStorage.getItem('map:' + hdr.join('|'))); } catch(e){}
+  fillSelects(hdr, saved);
+  $('mapping').classList.remove('hidden');
   $('searchCard').classList.remove('hidden');
   $('itemCard').classList.add('hidden');
   $('hits').innerHTML = ''; $('q').value = ''; $('clearBtn').classList.add('hidden');
+  current = null; currentArt = null;
 }
 
 /* ---------- Suche ---------- */
@@ -257,10 +327,10 @@ function search(){
   const term = $('q').value;
   $('clearBtn').classList.toggle('hidden', !term);
   $('hits').innerHTML = '';
-  if (!term.trim()) { $('itemCard').classList.add('hidden'); return; }
+  if (!term.trim()) { $('itemCard').classList.add('hidden'); current = null; currentArt = null; return; }
   const rows = find(term);
   if (rows.length === 1) { show(rows[0]); return; }
-  $('itemCard').classList.add('hidden');
+  $('itemCard').classList.add('hidden'); current = null; currentArt = null;
   if (!rows.length) { $('hits').innerHTML = '<div class="status err" style="margin-top:10px">Kein Artikel gefunden</div>'; return; }
   rows.forEach(r => {
     const b = document.createElement('button'); b.className = 'hit';
@@ -282,12 +352,13 @@ function paintQty(n, pop){
   if (pop) { el.classList.add('pop'); setTimeout(() => el.classList.remove('pop'), 120); }
 }
 function show(r){
-  current = r; $('hits').innerHTML = '';
+  current = r; currentArt = String(aoa[r][+$('colArt').value]); $('hits').innerHTML = '';
   $('iArt').textContent = 'Art.-Nr. ' + aoa[r][+$('colArt').value];
   $('iName').textContent = aoa[r][+$('colName').value] || '(ohne Bezeichnung)';
   paintQty(qty(r), false);
   $('saveStatus').textContent = '';
   $('itemCard').classList.remove('hidden');
+  if (syncMode && !importMode) setSync();
 }
 function change(d){
   if (current == null) return;
@@ -295,16 +366,17 @@ function change(d){
   const old = qty(current), n = Math.max(0, old + d);
   if (n === old) return;
   aoa[current][c] = n;
-  ws[XLSX.utils.encode_cell({r: range.s.r + current, c: range.s.c + c})] = { t:'n', v:n };
-  changes++;
+  if (ws && !(syncMode && !importMode)) ws[XLSX.utils.encode_cell({r: range.s.r + current, c: range.s.c + c})] = { t:'n', v:n };
   paintQty(n, true);
   if (navigator.vibrate) navigator.vibrate(8);
-  scheduleSave();
+  if (importMode) return;
+  if (syncMode) addPending(currentArt, n - old);
+  else { changes++; scheduleSave(); }
 }
 $('plus').onclick = () => change(1);
 $('minus').onclick = () => change(-1);
 
-/* ---------- Speichern ---------- */
+/* ---------- Lokales Speichern (ohne GitHub) ---------- */
 function scheduleSave(){
   dirty = true;
   status($('saveStatus'), 'Speichere …');
@@ -335,29 +407,329 @@ async function save(){
 }
 
 /* ---------- Export ---------- */
-$('dlBtn').onclick = async () => {
-  if (!wb) return;
-  clearTimeout(saveTimer); if (!fileHandle && dirty) await persist();
-  const bytes = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  const base = fileName.replace(/\.(xlsx|xlsm|xls)$/i, '');
+async function deliver(bytes, baseName){
   if (isIOS && navigator.canShare) {
-    const file = new File([bytes], base + '.xlsx', {type: XLSX_MIME});
+    const file = new File([bytes], baseName + '.xlsx', {type: XLSX_MIME});
     if (navigator.canShare({files:[file]})) {
-      try {
-        await navigator.share({files:[file]});
-        changes = 0; await persist(); updateHint();
-        return;
-      } catch(e){ if (e.name === 'AbortError') return; }
+      try { await navigator.share({files:[file]}); return true; }
+      catch(e){ if (e.name === 'AbortError') return false; }
     }
   }
   const d = new Date(), p = n => String(n).padStart(2, '0');
   const stamp = d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes());
-  XLSX.writeFile(wb, base + '_' + stamp + '.xlsx');
-  changes = 0; if (!fileHandle) await persist(); updateHint();
+  const blob = new Blob([bytes], {type: XLSX_MIME});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = baseName + '_' + stamp + '.xlsx';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  return true;
+}
+$('dlBtn').onclick = async () => {
+  if (syncMode) {
+    if (!GH.base) return;
+    const out = XLSX.utils.book_new();
+    const sheetName = String(GH.base.sheet || 'Bestand').replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31) || 'Bestand';
+    XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(aoa), sheetName);
+    const bytes = XLSX.write(out, {bookType:'xlsx', type:'array'});
+    await deliver(bytes, String(GH.base.source || 'Bestand').replace(/\.(xlsx|xlsm|xls)$/i, ''));
+    return;
+  }
+  if (!wb) return;
+  clearTimeout(saveTimer); if (!fileHandle && dirty) await persist();
+  const bytes = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  if (await deliver(bytes, fileName.replace(/\.(xlsx|xlsm|xls)$/i, ''))) {
+    changes = 0; if (!fileHandle) await persist(); updateHint();
+  }
 };
 
-/* ---------- Beim Start: letzten Stand anbieten ---------- */
+/* =====================================================================
+   GitHub-Synchronisierung
+   ===================================================================== */
+const GH = { base: null, sha: null, etag: null, pending: {}, busy: false, again: false, err: null, lastOk: 0, timer: null };
+
+function cfg(){ try { const c = JSON.parse(localStorage.getItem('ghcfg')); return c && c.token && c.owner && c.repo ? c : null; } catch(e){ return null; } }
+function cfgKey(c){ return c.owner + '/' + c.repo + '@' + c.branch + ':' + c.path; }
+class GhError extends Error { constructor(status, msg){ super(msg); this.status = status; } }
+
+function b64enc(str){
+  const bytes = new TextEncoder().encode(str); let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function b64dec(b64){
+  const bin = atob(b64.replace(/\s/g, ''));
+  return new TextDecoder().decode(Uint8Array.from(bin, ch => ch.charCodeAt(0)));
+}
+const ghHeaders = c => ({ 'Authorization': 'Bearer ' + c.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' });
+const ghRepoUrl = (c, p) => 'https://api.github.com/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo) + (p || '');
+const ghFileUrl = c => ghRepoUrl(c, '/contents/' + c.path.split('/').map(encodeURIComponent).join('/'));
+
+async function ghFetch(url, opts){
+  try { return await fetch(url, { cache: 'no-store', ...opts }); }
+  catch(e){ throw new GhError(0, 'offline'); }
+}
+async function ghErr(res){
+  let msg = '';
+  try { msg = (await res.json()).message || ''; } catch(e){}
+  if (res.status === 401) return new GhError(401, 'Token ungültig oder abgelaufen');
+  if (res.status === 403) return new GhError(403, /rate limit/i.test(msg) ? 'Anfragelimit erreicht, später erneut' : 'Keine Berechtigung (Token: Contents Read and write?)');
+  if (res.status === 404) return new GhError(404, 'Repository nicht gefunden oder kein Zugriff');
+  return new GhError(res.status, msg || ('Fehler ' + res.status));
+}
+async function ghGetFile(c, useEtag){
+  const h = ghHeaders(c); if (useEtag && GH.etag) h['If-None-Match'] = GH.etag;
+  const res = await ghFetch(ghFileUrl(c) + '?ref=' + encodeURIComponent(c.branch), { headers: h });
+  if (res.status === 304) return { notModified: true };
+  if (res.status === 404) {
+    // Datei fehlt, oder Repository/Branch unbekannt: Repository prüfen
+    const r2 = await ghFetch(ghRepoUrl(c), { headers: ghHeaders(c) });
+    if (!r2.ok) throw await ghErr(r2);
+    return { missing: true };
+  }
+  if (!res.ok) throw await ghErr(res);
+  const j = await res.json();
+  if (!j.content && j.size > 0) throw new GhError(413, 'Datei zu groß (über 1 MB)');
+  return { sha: j.sha, etag: res.headers.get('ETag'), data: JSON.parse(b64dec(j.content)) };
+}
+async function ghPutFile(c, data, sha, message){
+  const body = { message, content: b64enc(JSON.stringify(data)), branch: c.branch };
+  if (sha) body.sha = sha;
+  const res = await ghFetch(ghFileUrl(c), { method: 'PUT', headers: { ...ghHeaders(c), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (res.ok) { const j = await res.json(); return { ok: true, sha: j.content.sha }; }
+  if (res.status === 409 || res.status === 422) return { ok: false, conflict: true };
+  throw await ghErr(res);
+}
+
+/* Änderungen (Deltas) auf eine Datenbasis anwenden */
+function applyDeltas(base, deltas){
+  const rows = base.rows.map(r => r.slice());
+  const a = base.map.art, q = base.map.qty, idx = {}, lost = [];
+  rows.forEach((r, i) => { const k = String(r[a]); if (!(k in idx)) idx[k] = i; });
+  for (const k in deltas) {
+    const i = idx[k];
+    if (i === undefined) { lost.push(k); continue; }
+    const cur = Number(rows[i][q]);
+    rows[i][q] = Math.max(0, (isNaN(cur) ? 0 : cur) + deltas[k]);
+  }
+  return { data: { ...base, rows }, lost };
+}
+
+function setSync(){
+  if (!syncMode) return;
+  const n = Object.keys(GH.pending).length;
+  let t, cls = '', s, scls = '';
+  if (importMode) { t = 'Import – noch nicht hochgeladen'; cls = 'warn'; s = ''; }
+  else if (GH.err) { t = 'GitHub · ' + GH.err + (n ? ' · ' + n + ' offen' : ''); cls = 'err'; s = n ? 'Wird später gesendet …' : GH.err; scls = n ? 'warn' : 'err'; }
+  else if (GH.busy && n) { t = 'GitHub · sende …'; s = 'Wird gesendet …'; }
+  else if (n) { t = 'GitHub · ' + n + ' Änderung(en) offen'; cls = 'warn'; s = 'Wird gesendet …'; scls = 'warn'; }
+  else if (GH.lastOk) { t = 'GitHub · synchronisiert ✓'; cls = 'ok'; s = 'Synchronisiert ✓'; scls = 'ok'; }
+  else { t = 'GitHub · verbinde …'; s = ''; }
+  status($('fileStatus'), t, cls);
+  status($('saveStatus'), s, scls);
+}
+function handleErr(e){
+  GH.err = e.status === 0 ? 'offline' : e.message;
+  if (e.status !== 0) console.warn(e);
+}
+
+async function savePending(){
+  const c = cfg(); if (!c) return;
+  try { await idb.set('sync', { key: cfgKey(c), base: GH.base, sha: GH.sha, pending: GH.pending }); } catch(e){}
+}
+
+/* Anzeige aus Basis + offenen Änderungen neu aufbauen */
+function rebuildFromBase(){
+  if (!GH.base) return;
+  const { data } = applyDeltas(GH.base, GH.pending);
+  const h = data.headers.map(x => String(x));
+  const same = hdr.length === h.length && hdr.every((x, i) => x === h[i]);
+  hdr = h; aoa = [data.headers, ...data.rows];
+  if (!same || $('colArt').options.length !== h.length) fillSelects(h, [data.map.art, data.map.name, data.map.qty]);
+  else { $('colArt').value = data.map.art; $('colName').value = data.map.name; $('colQty').value = data.map.qty; }
+  if (!importMode) { $('mapping').classList.add('hidden'); $('sheetWrap').classList.add('hidden'); }
+  $('searchCard').classList.remove('hidden'); $('emptyCard').classList.add('hidden'); $('dlCard').classList.remove('hidden');
+  updateHint();
+  if (current != null) {
+    const a = +$('colArt').value; let i = -1;
+    for (let r = 1; r < aoa.length; r++) if (String(aoa[r][a]) === currentArt) { i = r; break; }
+    if (i < 0) { current = null; currentArt = null; $('itemCard').classList.add('hidden'); }
+    else { current = i; $('iName').textContent = aoa[i][+$('colName').value] || '(ohne Bezeichnung)'; paintQty(qty(i), false); }
+  }
+  if ($('q').value.trim() && current == null) search();
+}
+
+function showNoData(){
+  GH.base = null; aoa = []; current = null; currentArt = null;
+  $('searchCard').classList.add('hidden'); $('itemCard').classList.add('hidden'); $('dlCard').classList.add('hidden');
+  $('emptyCard').classList.remove('hidden');
+  $('emptyText').textContent = 'Im GitHub-Repository liegt noch keine Bestandsdatei. Tippe auf „Excel importieren“ und wähle deine Zählliste. Sie wird dann für alle Geräte bereitgestellt.';
+}
+
+async function pull(initial){
+  const c = cfg(); if (!c) return;
+  GH.busy = true; setSync();
+  try {
+    const g = await ghGetFile(c, !initial);
+    if (g.missing) { showNoData(); GH.pending = {}; }
+    else if (!g.notModified) { GH.base = g.data; GH.sha = g.sha; GH.etag = g.etag; rebuildFromBase(); }
+    GH.err = null; GH.lastOk = Date.now();
+  } catch(e){ handleErr(e); }
+  GH.busy = false; savePending(); setSync();
+}
+
+function addPending(art, d){
+  const k = String(art);
+  GH.pending[k] = (GH.pending[k] || 0) + d;
+  if (!GH.pending[k]) delete GH.pending[k];
+  savePending(); setSync(); scheduleFlush();
+}
+function scheduleFlush(ms){ clearTimeout(GH.timer); GH.timer = setTimeout(flush, ms == null ? 700 : ms); }
+
+async function flush(){
+  const c = cfg(); if (!c || !GH.base || importMode) return;
+  if (GH.busy) { GH.again = true; return; }
+  if (!Object.keys(GH.pending).length) return;
+  GH.busy = true; setSync();
+  try {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const sending = { ...GH.pending };
+      const keys = Object.keys(sending);
+      if (!keys.length) break;
+      const { data } = applyDeltas(GH.base, sending);
+      data.updated = new Date().toISOString();
+      const fmt = v => (v > 0 ? '+' : '') + v;
+      const msg = keys.length === 1 ? 'Bestand ' + keys[0] + ': ' + fmt(sending[keys[0]]) : 'Bestand: ' + keys.length + ' Artikel aktualisiert';
+      const r = await ghPutFile(c, data, GH.sha, msg);
+      if (r.ok) {
+        GH.sha = r.sha; GH.base = data; GH.etag = null;
+        for (const k in sending) { GH.pending[k] -= sending[k]; if (!GH.pending[k]) delete GH.pending[k]; }
+        break;
+      }
+      const g = await ghGetFile(c, false);       // Konflikt: aktuellen Stand holen, Änderungen erneut anwenden
+      if (g.missing) { GH.sha = null; continue; }
+      GH.base = g.data; GH.sha = g.sha; GH.etag = g.etag;
+    }
+    GH.err = null; GH.lastOk = Date.now();
+  } catch(e){ handleErr(e); }
+  GH.busy = false;
+  await savePending(); rebuildFromBase(); setSync();
+  if (GH.again || (!GH.err && Object.keys(GH.pending).length)) { GH.again = false; scheduleFlush(); }
+}
+
+async function tick(){
+  if (!syncMode || importMode || document.hidden || GH.busy) return;
+  if (Object.keys(GH.pending).length) return flush();
+  return pull(false);
+}
+setInterval(tick, 15000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+window.addEventListener('online', () => tick());
+
+async function enterSyncMode(){
+  const c = cfg(); if (!c) return;
+  syncMode = true; importMode = false;
+  wb = null; ws = null; fileHandle = null;
+  $('openBtn').textContent = 'Excel importieren';
+  $('restoreCard').classList.add('hidden');
+  $('importCard').classList.add('hidden');
+  GH.base = null; GH.sha = null; GH.etag = null; GH.pending = {}; GH.err = null; GH.lastOk = 0;
+  $('emptyCard').classList.remove('hidden');
+  $('emptyText').textContent = 'Verbinde mit GitHub …';
+  try {
+    const st = await idb.get('sync');
+    if (st && st.key === cfgKey(c) && st.base) { GH.base = st.base; GH.sha = st.sha; GH.pending = st.pending || {}; rebuildFromBase(); }
+  } catch(e){}
+  setSync();
+  await pull(true);
+  if (Object.keys(GH.pending).length) flush();
+}
+
+/* ---------- Import einer Excel-Datei in GitHub ---------- */
+function startImport(buf, name){
+  readWorkbook(buf, name);
+  importMode = true;
+  $('importText').textContent = name + ' ist geladen. Prüfe unter „Spalten anpassen“, ob Artikelnummer, Bezeichnung und Bestand stimmen, und suche zur Kontrolle einen Artikel. Dann hochladen.';
+  $('importCard').classList.remove('hidden');
+  $('emptyCard').classList.add('hidden'); $('restoreCard').classList.add('hidden');
+  $('mapping').open = true; $('mapping').classList.remove('hidden');
+  $('dlCard').classList.add('hidden');
+  setSync();
+}
+$('importCancel').onclick = () => {
+  importMode = false; wb = null; ws = null;
+  $('importCard').classList.add('hidden');
+  if (GH.base) rebuildFromBase(); else showNoData();
+  setSync();
+};
+$('importGo').onclick = async () => {
+  const c = cfg(); if (!c || !importMode) return;
+  const headers = aoa[0].map(h => String(h));
+  let rows = aoa.slice(1).map(r => { r = r.slice(0, headers.length); while (r.length < headers.length) r.push(''); return r; })
+                         .filter(r => r.some(v => String(v).trim() !== ''));
+  const data = {
+    v: 1, source: fileName, sheet: $('sheetSel').value || (wb && wb.SheetNames[0]) || 'Bestand',
+    headers, rows, map: { art: +$('colArt').value, name: +$('colName').value, qty: +$('colQty').value },
+    updated: new Date().toISOString()
+  };
+  if (!rows.length) { alert('Die Datei enthält keine Artikel.'); return; }
+  $('importGo').disabled = true;
+  try {
+    const g = await ghGetFile(c, false);
+    if (g.data && !confirm('In GitHub liegt bereits ein Bestand (' + g.data.rows.length + ' Artikel). Er wird durch die Excel-Datei ersetzt (' + rows.length + ' Artikel). Fortfahren?')) { $('importGo').disabled = false; return; }
+    const r = await ghPutFile(c, data, g.missing ? null : g.sha, 'Bestand importiert: ' + fileName + ' (' + rows.length + ' Artikel)');
+    if (!r.ok) throw new GhError(409, 'Konflikt, bitte erneut versuchen');
+    GH.base = data; GH.sha = r.sha; GH.etag = null; GH.pending = {}; GH.err = null; GH.lastOk = Date.now();
+    importMode = false; wb = null; ws = null;
+    $('importCard').classList.add('hidden');
+    rebuildFromBase(); await savePending(); setSync();
+  } catch(e){ alert('Import fehlgeschlagen: ' + (e.status === 0 ? 'keine Verbindung' : e.message)); }
+  $('importGo').disabled = false;
+};
+
+/* ---------- Einstellungen ---------- */
+function openSettings(){
+  const c = cfg() || {};
+  $('cfgOwner').value = c.owner || ''; $('cfgRepo').value = c.repo || '';
+  $('cfgBranch').value = c.branch || 'main'; $('cfgPath').value = c.path || 'bestand.json';
+  $('cfgToken').value = c.token || '';
+  $('cfgOff').classList.toggle('hidden', !c.token);
+  status($('cfgMsg'), '');
+  $('settingsCard').classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+$('setBtn').onclick = () => $('settingsCard').classList.contains('hidden') ? openSettings() : $('settingsCard').classList.add('hidden');
+$('cfgClose').onclick = () => $('settingsCard').classList.add('hidden');
+$('cfgSave').onclick = async () => {
+  const c = {
+    owner: $('cfgOwner').value.trim(), repo: $('cfgRepo').value.trim(),
+    branch: $('cfgBranch').value.trim() || 'main', path: ($('cfgPath').value.trim() || 'bestand.json').replace(/^\/+/, ''),
+    token: $('cfgToken').value.trim()
+  };
+  if (!c.owner || !c.repo || !c.token) { status($('cfgMsg'), 'Bitte Konto, Repository und Token ausfüllen.', 'err'); return; }
+  status($('cfgMsg'), 'Teste Verbindung …');
+  try {
+    const r = await ghFetch(ghRepoUrl(c), { headers: ghHeaders(c) });
+    if (!r.ok) throw await ghErr(r);
+    const repo = await r.json();
+    if (repo.private === false && !confirm('ACHTUNG: Dieses Repository ist ÖFFENTLICH. Jeder könnte deine Bestandsdaten sehen.\n\nTrotzdem verwenden?')) { status($('cfgMsg'), 'Abgebrochen. Bitte ein privates Repository verwenden.', 'err'); return; }
+    const g = await ghGetFile(c, false);
+    localStorage.setItem('ghcfg', JSON.stringify(c));
+    status($('cfgMsg'), g.missing ? 'Verbunden ✓ Noch keine Datei vorhanden: importiere jetzt deine Excel-Datei.' : 'Verbunden ✓ ' + g.data.rows.length + ' Artikel gefunden.', 'ok');
+    $('cfgOff').classList.remove('hidden');
+    await enterSyncMode();
+    setTimeout(() => { if (cfg()) $('settingsCard').classList.add('hidden'); }, 1200);
+  } catch(e){ status($('cfgMsg'), e.status === 0 ? 'Keine Internetverbindung.' : e.message, 'err'); }
+};
+$('cfgOff').onclick = async () => {
+  if (Object.keys(GH.pending).length && !confirm('Es gibt noch nicht gesendete Änderungen. Trotzdem trennen?')) return;
+  if (!confirm('GitHub-Verbindung auf diesem Gerät trennen? Die Daten in GitHub bleiben erhalten.')) return;
+  try { localStorage.removeItem('ghcfg'); await idb.del('sync'); } catch(e){}
+  location.reload();
+};
+
+/* ---------- Start ---------- */
 (async () => {
+  if (cfg()) { await enterSyncMode(); return; }
   try {
     const st = await idb.get('state');
     if (!st || !st.bytes) return;
