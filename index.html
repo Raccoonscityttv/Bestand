@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <title>Bestand anpassen</title>
 <script src="xlsx.full.min.js"></script>
+<script src="jszip.min.js"></script>
 <style>
   :root{
     --bg:#eef1f5;--card:#fff;--text:#16202b;--muted:#68768a;--accent:#0b6bcb;--accent-soft:#e4f0fc;
@@ -39,7 +40,7 @@
   button:active{transform:scale(.97)}
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
   button.icon{padding:10px 12px;font-size:1.15rem;line-height:1}
-  input[type=text],input[type=password],select{font:inherit;font-size:16px;width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none;appearance:none}
+  input[type=text],input[type=password],input[type=number],select{font:inherit;font-size:16px;width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none;appearance:none}
   input:focus,select:focus{border-color:var(--accent)}
   label{display:block;font-size:.76rem;font-weight:600;color:var(--muted);margin:0 0 6px;text-transform:uppercase;letter-spacing:.5px}
   .field{margin-bottom:12px}
@@ -88,6 +89,7 @@
   </div>
 </header>
 <input type="file" id="logoInput" accept="image/*" class="hidden">
+<input type="file" id="tplInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
 <input type="file" id="fallbackInput" accept=".xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
 
 <main>
@@ -175,9 +177,26 @@
   </div>
 
   <div class="card hidden" id="dlCard">
-    <div class="foot">
-      <div class="status" id="dlHint" style="flex:1;min-width:180px"></div>
+    <div class="status" id="dlHint" style="margin-bottom:12px"></div>
+    <div class="btnrow" style="margin-top:0">
+      <button id="tplBtn">In Vorlage übernehmen</button>
       <button class="primary" id="dlBtn">Exportieren</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="tplCard">
+    <div style="font-weight:700;margin-bottom:4px">In leere Excel-Vorlage übernehmen</div>
+    <div class="status" id="tplName" style="margin-bottom:12px"></div>
+    <div class="grid2">
+      <div class="field"><label for="tplSheet">Tabellenblatt</label><select id="tplSheet"></select></div>
+      <div class="field"><label for="tplHeader">Kopfzeile in Zeile</label><input type="number" id="tplHeader" min="1" inputmode="numeric"></div>
+      <div class="field"><label for="tplArt">Spalte Artikelnr.</label><select id="tplArt"></select></div>
+      <div class="field"><label for="tplQty">Spalte Bestand</label><select id="tplQty"></select></div>
+    </div>
+    <div class="status" id="tplMsg" style="min-height:1.3em"></div>
+    <div class="btnrow">
+      <button class="primary" id="tplGo">Vorlage befüllen</button>
+      <button id="tplClose">Schließen</button>
     </div>
   </div>
 </main>
@@ -741,6 +760,179 @@ $('cfgOff').onclick = async () => {
   if (!confirm('GitHub-Verbindung auf diesem Gerät trennen? Die Daten in GitHub bleiben erhalten.')) return;
   try { localStorage.removeItem('ghcfg'); await idb.del('sync'); } catch(e){}
   location.reload();
+};
+
+/* =====================================================================
+   Excel-Vorlage befüllen (Formatierung der Vorlage bleibt erhalten)
+   ===================================================================== */
+/*PATCH-START*/
+const ln = n => n.localName || n.nodeName.replace(/^.*:/, '');
+function colLetter(n){ let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+function colIndex(letters){ let n = 0; for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64); return n - 1; }
+const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+async function patchXlsx(bytes, sheetName, updates){
+  const zip = await JSZip.loadAsync(bytes);
+  const parse = s => new DOMParser().parseFromString(s, 'application/xml');
+  const ser = d => { const s = new XMLSerializer().serializeToString(d); return s.startsWith('<?xml') ? s : XML_DECL + s; };
+  const readXml = async path => { const f = zip.file(path); if (!f) throw new Error('Datei fehlt in der Vorlage: ' + path); return parse(await f.async('string')); };
+
+  const wbDoc = await readXml('xl/workbook.xml');
+  const sh = [...wbDoc.getElementsByTagName('sheet')].find(s => s.getAttribute('name') === sheetName);
+  if (!sh) throw new Error('Tabellenblatt „' + sheetName + '“ nicht gefunden');
+  let rid = sh.getAttribute('r:id');
+  if (!rid) { for (const at of [...sh.attributes]) if (/(^|:)id$/.test(at.name) && at.name !== 'sheetId') rid = at.value; }
+  const relsDoc = await readXml('xl/_rels/workbook.xml.rels');
+  const rel = [...relsDoc.getElementsByTagName('Relationship')].find(r => r.getAttribute('Id') === rid);
+  if (!rel) throw new Error('Tabellenblatt-Verknüpfung nicht gefunden');
+  const target = rel.getAttribute('Target');
+  const sheetPath = target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '');
+  const doc = await readXml(sheetPath);
+  const ns = doc.documentElement.namespaceURI;
+  const sheetData = doc.getElementsByTagName('sheetData')[0];
+  if (!sheetData) throw new Error('Tabellenblatt hat keine Daten');
+
+  const rowEls = new Map();
+  for (const n of [...sheetData.childNodes]) if (n.nodeType === 1 && ln(n) === 'row') rowEls.set(+n.getAttribute('r'), n);
+
+  let removedFormula = false, done = 0, noRow = 0;
+  for (const u of updates) {
+    const rowEl = rowEls.get(u.row);
+    if (!rowEl) { noRow++; continue; }
+    const ref = colLetter(u.col) + u.row;
+    let cell = null, before = null;
+    for (const c of [...rowEl.childNodes]) {
+      if (c.nodeType !== 1 || ln(c) !== 'c') continue;
+      const r = c.getAttribute('r') || '';
+      if (r === ref) { cell = c; break; }
+      const m = /^([A-Z]+)/.exec(r);
+      if (!before && m && colIndex(m[1]) > u.col) before = c;
+    }
+    if (!cell) {
+      cell = doc.createElementNS(ns, 'c'); cell.setAttribute('r', ref);
+      rowEl.insertBefore(cell, before);
+    }
+    for (const ch of [...cell.childNodes]) {
+      if (ch.nodeType !== 1) { cell.removeChild(ch); continue; }
+      if (ln(ch) === 'f') removedFormula = true;
+      cell.removeChild(ch);
+    }
+    cell.removeAttribute('t');
+    const v = doc.createElementNS(ns, 'v'); v.appendChild(doc.createTextNode(String(u.value)));
+    cell.appendChild(v);
+    done++;
+  }
+
+  // Formeln der Vorlage beim Öffnen neu berechnen lassen
+  let calc = wbDoc.getElementsByTagName('calcPr')[0];
+  if (!calc) {
+    calc = wbDoc.createElementNS(wbDoc.documentElement.namespaceURI, 'calcPr');
+    let anchor = null;
+    for (const nm of ['definedNames', 'externalReferences', 'functionGroups', 'sheets']) { const f = wbDoc.getElementsByTagName(nm)[0]; if (f) { anchor = f; break; } }
+    if (anchor) wbDoc.documentElement.insertBefore(calc, anchor.nextSibling); else wbDoc.documentElement.appendChild(calc);
+  }
+  calc.setAttribute('fullCalcOnLoad', '1');
+
+  // Berechnungskette entfernen, wenn Formelzellen überschrieben wurden (sonst meldet Excel einen Fehler)
+  if (removedFormula && zip.file('xl/calcChain.xml')) {
+    zip.remove('xl/calcChain.xml');
+    for (const r of [...relsDoc.getElementsByTagName('Relationship')]) if (/calcChain/i.test(r.getAttribute('Type') || '')) r.parentNode.removeChild(r);
+    const ctDoc = await readXml('[Content_Types].xml');
+    for (const o of [...ctDoc.getElementsByTagName('Override')]) if (/calcChain/i.test(o.getAttribute('PartName') || '')) o.parentNode.removeChild(o);
+    zip.file('[Content_Types].xml', ser(ctDoc));
+  }
+  zip.file(sheetPath, ser(doc));
+  zip.file('xl/workbook.xml', ser(wbDoc));
+  zip.file('xl/_rels/workbook.xml.rels', ser(relsDoc));
+  const out = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+  return { bytes: out, done, noRow };
+}
+/*PATCH-END*/
+
+let tpl = null;
+$('tplBtn').onclick = () => { if (aoa.length < 2) return; $('tplInput').click(); };
+$('tplClose').onclick = () => { $('tplCard').classList.add('hidden'); tpl = null; };
+$('tplInput').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    if (!window.JSZip) throw new Error('Bibliothek nicht geladen');
+    if (!/\.xlsx$/i.test(f.name)) throw new Error('Bitte eine .xlsx-Datei wählen');
+    const buf = await f.arrayBuffer();
+    tpl = { name: f.name, bytes: new Uint8Array(buf), wb: XLSX.read(buf, { type: 'array' }) };
+    const sel = $('tplSheet'); sel.innerHTML = '';
+    tpl.wb.SheetNames.forEach(n => sel.add(new Option(n, n)));
+    sel.value = tpl.wb.SheetNames[0];
+    $('tplName').textContent = f.name;
+    tplLoadSheet();
+    status($('tplMsg'), '');
+    $('tplCard').classList.remove('hidden');
+    $('tplCard').scrollIntoView && $('tplCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch(err){ alert('Vorlage konnte nicht gelesen werden: ' + err.message); }
+  e.target.value = '';
+};
+$('tplSheet').onchange = () => tplLoadSheet();
+$('tplHeader').onchange = () => tplFillCols();
+
+function tplLoadSheet(){
+  const w = tpl.wb.Sheets[$('tplSheet').value];
+  tpl.range = XLSX.utils.decode_range(w['!ref'] || 'A1');
+  tpl.aoa = XLSX.utils.sheet_to_json(w, { header: 1, raw: true, defval: '', blankrows: true, range: w['!ref'] });
+  let hr = -1;
+  for (let i = 0; i < Math.min(15, tpl.aoa.length); i++) {
+    if (tpl.aoa[i].some(c => /art.*(nr|num)|artikel|nummer|sku|teilenr/i.test(String(c)))) { hr = i; break; }
+  }
+  if (hr < 0) hr = tpl.aoa.findIndex(r => r.filter(c => String(c).trim() !== '').length >= 2);
+  if (hr < 0) hr = 0;
+  $('tplHeader').value = tpl.range.s.r + hr + 1;
+  tplFillCols();
+}
+function tplFillCols(){
+  const hrow = Math.max(0, (+$('tplHeader').value || 1) - 1 - tpl.range.s.r);
+  const h = (tpl.aoa[hrow] || []).map(x => String(x).trim());
+  const aS = $('tplArt'), qS = $('tplQty');
+  [aS, qS].forEach(s => { s.innerHTML = ''; h.forEach((x, i) => s.add(new Option((x || 'Spalte') + ' (' + colLetter(tpl.range.s.c + i) + ')', i))); });
+  const g = (re, fb) => { const i = h.findIndex(x => re.test(x)); return i >= 0 ? i : fb; };
+  aS.value = g(/art.*(nr|num)|artikel|nummer|sku|teilenr/i, 0);
+  qS.value = g(/bestand|menge|anzahl|stück|stk|zähl/i, Math.min(2, h.length - 1));
+}
+
+$('tplGo').onclick = async () => {
+  if (!tpl) return;
+  const btn = $('tplGo'); btn.disabled = true;
+  try {
+    const a = +$('colArt').value, q = +$('colQty').value;
+    const data = new Map();                       // normalisierte Nummer -> {art, qty}
+    let blank = 0;
+    for (let r = 1; r < aoa.length; r++) {
+      const k = norm(aoa[r][a]); if (!k || data.has(k)) continue;
+      const raw = aoa[r][q], n = Number(raw);
+      if (raw === '' || raw == null || isNaN(n)) { blank++; data.set(k, { art: String(aoa[r][a]), qty: null }); continue; }
+      data.set(k, { art: String(aoa[r][a]), qty: n });
+    }
+    const hrow = (+$('tplHeader').value || 1) - 1 - tpl.range.s.r;
+    const ci = +$('tplArt').value, qi = +$('tplQty').value;
+    if (ci === qi) throw new Error('Artikelnummer und Bestand müssen verschiedene Spalten sein');
+    const updates = [], seen = new Set();
+    let tplRows = 0;
+    for (let i = hrow + 1; i < tpl.aoa.length; i++) {
+      const k = norm(tpl.aoa[i][ci]); if (!k) continue;
+      tplRows++;
+      const d = data.get(k); if (!d) continue;
+      seen.add(k);
+      if (d.qty == null) continue;
+      updates.push({ row: tpl.range.s.r + i + 1, col: tpl.range.s.c + qi, value: d.qty });
+    }
+    if (!updates.length) throw new Error('Kein Artikel der Vorlage passt zum Bestand. Prüfe Tabellenblatt, Kopfzeile und Spalte der Artikelnummer.');
+    status($('tplMsg'), 'Befülle Vorlage …');
+    const res = await patchXlsx(tpl.bytes, $('tplSheet').value, updates);
+    const missing = [...data.entries()].filter(([k]) => !seen.has(k)).map(([, v]) => v.art);
+    let msg = res.done + ' von ' + tplRows + ' Artikeln der Vorlage befüllt.';
+    if (missing.length) msg += ' ' + missing.length + ' Artikel aus dem Bestand stehen nicht in der Vorlage (' + missing.slice(0, 8).join(', ') + (missing.length > 8 ? ' …' : '') + ').';
+    if (tplRows - seen.size > 0) msg += ' ' + (tplRows - seen.size) + ' Zeile(n) der Vorlage ohne Entsprechung im Bestand blieben unverändert.';
+    if (res.noRow) msg += ' ' + res.noRow + ' Zeilen konnten nicht beschrieben werden.';
+    status($('tplMsg'), msg, missing.length || res.noRow ? 'warn' : 'ok');
+    await deliver(res.bytes, tpl.name.replace(/\.xlsx$/i, '') + '_befüllt');
+  } catch(err){ status($('tplMsg'), err.message, 'err'); }
+  btn.disabled = false;
 };
 
 /* ---------- Start ---------- */
